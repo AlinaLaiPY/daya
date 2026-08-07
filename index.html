@@ -96,7 +96,20 @@
   .stat:last-child{border-bottom:0;}
   .stat b{font-size:18px; font-weight:700; color:var(--muted);}
   .stat span{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;}
-  .stat.total{background:var(--green-light); margin:8px -16px -16px; padding:16px; border-radius:0 0 16px 16px;}
+  .stat.big{padding:14px 2px;}
+  .stat.big b{font-size:19px; color:var(--ink);}
+  .stat.big span{font-size:26px;}
+  .stat.sub{padding:9px 2px 9px 14px; border-bottom:0;}
+  .stat.sub b{font-size:17px; font-weight:400;}
+  .stat.sub span{font-size:19px; font-weight:700;}
+  .stat.sum{padding:10px 2px; border-top:2px solid var(--line); border-bottom:0; margin-top:2px;}
+  .stat.sum b{color:var(--green); font-size:18px;}
+  .stat.sum span{color:var(--green); font-size:22px;}
+  .sect{font-size:15px; font-weight:700; color:var(--muted); margin:16px 0 2px;
+        letter-spacing:1px; border-bottom:1px dashed var(--line); padding-bottom:6px;}
+  .calc{background:#f4f7f5; border-radius:10px; padding:10px; margin-top:10px;
+        font-size:15px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums;}
+  .stat.total{background:var(--green-light); margin:14px -16px 0; padding:16px; border-radius:12px;}
   .stat.total b{color:var(--green); font-size:20px;}
   .stat.total span{color:var(--green); font-size:28px;}
 
@@ -137,6 +150,19 @@
   .hint{font-size:16px; color:var(--muted); line-height:1.6; margin:10px 0 0;}
   .hint b{color:var(--ink);}
   .ol{margin:10px 0 0; padding-left:22px; font-size:16px; color:var(--muted); line-height:1.75;}
+  .fixed{display:flex; align-items:center; justify-content:space-between; gap:10px;
+         background:#f4f7f5; border-radius:12px; padding:12px 14px; margin-top:14px; font-size:16px; color:var(--muted);}
+  .fixed b{color:var(--ink); font-size:18px;}
+  .ver{text-align:center; font-size:14px; color:#93a09a; margin:4px 0 20px;}
+  .fixed button{border:2px solid var(--line); background:#fff; color:var(--muted);
+                border-radius:10px; padding:8px 14px; font-size:15px; font-family:inherit; white-space:nowrap;}
+  .okbox{border:3px solid var(--green);}
+  .okbox h2{color:var(--green);}
+  .errbox{border:3px solid var(--danger);}
+  .errbox h2{color:var(--danger);}
+  .errlist{background:#fdf1ef; border-radius:12px; padding:12px; margin-top:10px;
+           font-size:15px; line-height:1.6; color:#7d2419; word-break:break-all;}
+  .errlist div{margin-bottom:6px;}
 </style>
 </head>
 <body>
@@ -236,17 +262,15 @@
 <section class="page" id="p-out">
   <div class="card">
     <h2>產出 Excel 報表</h2>
-    <label class="f"><span>勞健保（每月固定）</span>
-      <input type="text" id="f_labor" inputmode="numeric" value="3000">
-    </label>
     <button class="btn" id="exportBtn">產出本月 Excel 檔</button>
-    <p class="hint">檔名為 <b>大雅車行-2026年○月報表.xlsx</b>，格式與公司原本的表格一樣。</p>
-    <ol class="ol">
-      <li>按上面的按鈕，檔案會存到手機。</li>
-      <li>iPhone：到「檔案」App →「下載項目」找到檔案。</li>
-      <li>長按檔案 →「共享」→ 選 LINE 或 Email 傳給公司。</li>
-    </ol>
+    <p class="hint">檔案會存到手機的「檔案」App →「下載項目」，長按 → 共享 → 傳給公司。</p>
+    <div class="fixed">
+      <span>勞健保補貼　<b id="laborShow">3,000</b>　（公司固定給，已寫進報表）</span>
+      <button id="laborEdit">修改</button>
+    </div>
   </div>
+
+  <div class="card okbox" id="checkBox" style="display:none"></div>
 
   <div class="card">
     <h2>資料備份</h2>
@@ -261,6 +285,8 @@
     <p class="hint">會刪掉<b>目前這個月</b>的所有紀錄，刪掉就救不回來了。</p>
     <button class="btn danger" id="wipeBtn" style="margin-top:12px">刪除本月全部紀錄</button>
   </div>
+
+  <p class="ver">大雅車行記帳　版本 <b id="verNo">v5</b></p>
 </section>
 
 </main>
@@ -358,18 +384,26 @@ function monthRecords(){
 
 /* ---------------- 工具 ---------------- */
 function $(id){ return document.getElementById(id); }
+/* 把全形數字、逗號、空白、「元」統一成乾淨的半形數字字串 */
+function normNum(v){
+  if(v===null||v===undefined) return "";
+  var s = String(v);
+  s = s.replace(/[\uFF10-\uFF19]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); });
+  s = s.replace(/[\uFF0E\u3002]/g, ".").replace(/[\uFF0D\u2212]/g, "-");
+  s = s.replace(/[,\s，、]/g, "");
+  s = s.replace(/(元|塊|NT\$|\$)/gi, "");
+  return s.trim();
+}
 function num(v){
-  if(v===null||v===undefined) return 0;
-  var s = String(v).replace(/[,\s，]/g,"");
+  var s = normNum(v);
   if(s==="") return 0;
   var n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
 function isNum(v){
-  if(v===null||v===undefined) return false;
-  var s = String(v).replace(/[,\s，]/g,"");
+  var s = normNum(v);
   if(s==="") return false;
-  return !isNaN(parseFloat(s)) && isFinite(s);
+  return /^-?\d+(\.\d+)?$/.test(s);
 }
 function money(n){ return Math.round(n).toLocaleString("en-US"); }
 var toastT;
@@ -485,10 +519,34 @@ function renderSuggestions(){
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
 /* 儲存 */
+var MONEY = [["income","實收"],["wage","工資"],["fuel","油資"],["wash","洗車"],["taxi","計程車"],
+             ["park","停車"],["sign","舉牌"],["other","其他費用"],["back","回帳"],["monthly","月結"]];
+var TEXT_OK = ["X","x","免簽收","A車收","B車收","合計","去回"];
+
+/* 把金額欄位整理乾淨；回傳有問題的欄位 */
+function tidyMoney(o){
+  var bad = [];
+  MONEY.forEach(function(p){
+    var k = p[0], v = (o[k]||"").trim();
+    if(v==="") return;
+    var n = normNum(v);
+    if(/^-?\d+(\.\d+)?$/.test(n)){ o[k] = n; return; }   // 自動修正全形、逗號、「元」
+    o[k] = v;
+    if(TEXT_OK.indexOf(v) < 0) bad.push(p[1] + "：" + v);
+  });
+  return bad;
+}
+
 $("saveBtn").addEventListener("click", function(){
   var o = readForm();
   if(!o.date){ toast("請先選日期"); return; }
   if(!o.cust && !o.trip){ toast("請至少填客戶或行程"); return; }
+  var bad = tidyMoney(o);
+  if(bad.length){
+    if(!confirm("下面這些欄位不是數字：\n\n" + bad.join("\n") +
+                "\n\n這樣加總的時候會被跳過（金額不會被算到）。\n文字建議寫在「備註」。\n\n還是要照這樣存嗎？")) return;
+  }
+  FIELDS.forEach(function(f){ $("f_"+f).value = o[f]; });
   if(editingId){
     for(var i=0;i<DB.records.length;i++){
       if(DB.records[i].id===editingId){
@@ -539,20 +597,48 @@ function calcStats(){
   s.labor = num(DB.settings.labor);
   s.net = s.income - s.wage - s.spend - s.back - s.fuel - s.taxi - s.labor;
   s.count = rs.length;
+  s.mine    = s.wage + s.labor;              // 爸爸實得：工資＋勞健保補貼
+  s.advance = s.fuel + s.spend + s.taxi;     // 先墊付的，要還爸爸
+  s.checkOK = Math.abs((s.mine + s.advance + s.back + s.net) - s.income) < 0.0001;
   return s;
 }
 function renderStats(){
   var s = calcStats();
-  var rows = [
-    ["收入（實收）", s.income],["工資", s.wage],["支出（洗車/停車/舉牌/其他）", s.spend],
-    ["回帳", s.back],["加油", s.fuel],["計程車", s.taxi],["勞健保", s.labor]
-  ];
-  var html = rows.map(function(r){
-    return '<div class="stat"><b>'+r[0]+'</b><span>'+money(r[1])+'</span></div>';
-  }).join("");
-  html += '<div class="stat"><b>月結（簽單）</b><span>'+money(s.monthly)+'</span></div>';
-  html += '<div class="stat total"><b>結餘</b><span>'+money(s.net)+'</span></div>';
-  $("statBox").innerHTML = html;
+  function row(label, val, sub){
+    return '<div class="stat'+(sub?' sub':'')+'"><b>'+label+'</b><span>'+money(val)+'</span></div>';
+  }
+  function sect(t){ return '<div class="sect">'+t+'</div>'; }
+
+  var h = '';
+  h += '<div class="stat big"><b>客人給的現金（實收）</b><span>'+money(s.income)+'</span></div>';
+
+  h += sect('這些是爸爸的錢');
+  h += row('工資', s.wage, true);
+  h += row('勞健保補貼（公司給爸爸的）', s.labor, true);
+  h += '<div class="stat sum"><b>爸爸實得</b><span>'+money(s.mine)+'</span></div>';
+
+  h += sect('爸爸先墊的，要還他');
+  h += row('加油', s.fuel, true);
+  h += row('洗車・停車・舉牌・其他', s.spend, true);
+  h += row('計程車', s.taxi, true);
+  h += '<div class="stat sum"><b>墊付合計</b><span>'+money(s.advance)+'</span></div>';
+
+  if(s.back){
+    h += sect('已經先繳回公司的');
+    h += row('回帳', s.back, true);
+  }
+
+  h += '<div class="stat total"><b>剩下要繳回公司</b><span>'+money(s.net)+'</span></div>';
+  h += '<div class="calc">' + money(s.mine) + ' ＋ ' + money(s.advance) +
+       (s.back ? ' ＋ ' + money(s.back) : '') +
+       ' ＋ ' + money(s.net) + ' ＝ ' + money(s.income) +
+       (s.checkOK ? ' ✓' : ' ⚠') + '</div>';
+
+  h += sect('另外（不經過爸爸的手）');
+  h += row('簽單（月結，客人還沒付）', s.monthly, true);
+  h += '<p class="hint" style="margin-top:4px">這筆錢公司自己跟客人收，沒有算在上面。</p>';
+
+  $("statBox").innerHTML = h;
 }
 
 /* ---------------- 清單 ---------------- */
@@ -604,8 +690,16 @@ document.addEventListener("click", function(e){
 });
 
 /* ---------------- 設定 ---------------- */
-$("f_labor").addEventListener("input", function(){
-  DB.settings.labor = this.value.trim(); save();
+function showLabor(){ $("laborShow").textContent = money(num(DB.settings.labor)); }
+$("laborEdit").addEventListener("click", function(){
+  var cur = num(DB.settings.labor);
+  var v = prompt("勞健保補貼是公司固定給的金額，平常不用改。\n\n只有公司真的調整了才改。目前是 " + money(cur) + " 元。", String(cur));
+  if(v === null) return;
+  var n = normNum(v);
+  if(!/^\d+(\.\d+)?$/.test(n)){ alert("請填數字。沒有更動。"); return; }
+  if(!confirm("要把勞健保補貼從 " + money(cur) + " 改成 " + money(Number(n)) + " 嗎？\n\n這會改變報表上的「結餘」。")) return;
+  DB.settings.labor = n; save(); showLabor(); renderList();
+  toast("已改成 " + money(Number(n)));
 });
 
 /* ---------------- 下載 ---------------- */
@@ -621,30 +715,89 @@ function download(blob, filename){
 var HEADERS = ["日期","客戶名稱","行程","實收","工資","油資","洗車","計程車","停車","舉牌","其他費用","備註","回帳","月結"];
 var WIDTHS  = [5.4, 9.8, 29.8, 7.6, 8.0, 7.6, 5.8, 7.0, 5.6, 5.6, 8.0, 6.6, 6.4, 7.4];
 var ORDER   = ["date","cust","trip","income","wage","fuel","wash","taxi","park","sign","other","note","back","monthly"];
-var LASTROW = 132, SUMROW = 133;
+var SUMCOLS = [4,5,6,7,8,9,10,11,13,14];
 
 function thin(){ var s={style:"thin",color:{argb:"FF000000"}}; return {top:s,left:s,bottom:s,right:s}; }
+function colLetter(n){ var s=""; while(n>0){ var m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=(n-m-1)/26; } return s; }
+
+/* 一筆紀錄 → 該儲存格「應該」是什麼（欄位順序同 ORDER） */
+function expectCell(rec, c){
+  var v = (rec[ORDER[c-1]] || "").trim();
+  if(v === "") return {kind:"empty"};
+  if(c === 1){
+    var p = v.split("-");
+    return {kind:"date", y:+p[0], m:+p[1], d:+p[2]};
+  }
+  if(c === 2 || c === 3 || c === 12) return {kind:"text", v:v};
+  return isNum(v) ? {kind:"number", v:num(v)} : {kind:"text", v:v};
+}
+
+/* 從讀回來的檔案取出儲存格內容，轉成同樣的比較格式 */
+function actualCell(cell){
+  var v = cell ? cell.value : null;
+  if(v === null || v === undefined || v === "") return {kind:"empty"};
+  if(v instanceof Date) return {kind:"date", y:v.getFullYear(), m:v.getMonth()+1, d:v.getDate()};
+  if(typeof v === "number") return {kind:"number", v:v};
+  if(typeof v === "object"){
+    if(v.formula !== undefined) return {kind:"formula", f:v.formula, r:v.result};
+    if(v.richText) return {kind:"text", v:v.richText.map(function(t){return t.text;}).join("")};
+    if(v.text !== undefined) return {kind:"text", v:String(v.text)};
+  }
+  return {kind:"text", v:String(v)};
+}
+function sameCell(a, b){
+  if(a.kind !== b.kind) return false;
+  if(a.kind === "empty") return true;
+  if(a.kind === "date") return a.y===b.y && a.m===b.m && a.d===b.d;
+  if(a.kind === "number") return Math.abs(a.v-b.v) < 0.0001;
+  return a.v === b.v;
+}
+function describe(x){
+  if(x.kind==="empty") return "(空白)";
+  if(x.kind==="date") return x.y+"/"+x.m+"/"+x.d;
+  if(x.kind==="formula") return "="+x.f;
+  return String(x.v);
+}
 
 $("exportBtn").addEventListener("click", function(){
   var rs = monthRecords();
   if(!rs.length){ toast("這個月還沒有紀錄"); return; }
-  var btn = this; btn.textContent = "產生中…"; btn.disabled = true;
+  var btn = this; btn.textContent = "產生並核對中…"; btn.disabled = true;
+  $("checkBox").style.display = "none";
   setTimeout(function(){
-    try{ buildExcel(rs); }
-    catch(err){ alert("產生失敗："+err.message); }
-    btn.textContent = "產出本月 Excel 檔"; btn.disabled = false;
+    buildExcel(rs).catch(function(err){
+      showCheck(false, ["產生失敗：" + (err && err.message ? err.message : err)]);
+    }).then(function(){
+      btn.textContent = "產出本月 Excel 檔"; btn.disabled = false;
+    });
   }, 50);
 });
 
 function buildExcel(rs){
   var title = curY+"年"+curM+"月";
+  var LASTROW = Math.max(132, rs.length + 2);   // 資料列一定放得下
+  var SUMROW  = LASTROW + 1;
+  var S       = SUMROW + 2;
+
+  /* 手機這邊先算好每一欄的合計，等一下要拿來跟檔案對 */
+  var totals = {};
+  SUMCOLS.forEach(function(c){
+    var key = ORDER[c-1], t = 0;
+    rs.forEach(function(r){ var v=(r[key]||"").trim(); if(isNum(v)) t += num(v); });
+    totals[c] = t;
+  });
+  var T_income=totals[4], T_wage=totals[5], T_fuel=totals[6], T_wash=totals[7],
+      T_taxi=totals[8], T_park=totals[9], T_sign=totals[10], T_other=totals[11],
+      T_back=totals[13], T_monthly=totals[14];
+  var T_spend = T_wash + T_park + T_sign + T_other;
+  var T_labor = num(DB.settings.labor);
+  var T_net   = T_income - T_wage - T_spend - T_back - T_fuel - T_taxi - T_labor;
+
   var wb = new ExcelJS.Workbook();
   wb.creator = "大雅車行";
   var ws = wb.addWorksheet(title, { views:[{state:"frozen", ySplit:2}] });
-
   for(var c=0;c<WIDTHS.length;c++) ws.getColumn(c+1).width = WIDTHS[c];
 
-  // 標題列
   ws.mergeCells(1,1,1,14);
   var t = ws.getCell(1,1);
   t.value = title;
@@ -654,7 +807,6 @@ function buildExcel(rs){
   for(var c1=1;c1<=14;c1++) ws.getCell(1,c1).border = thin();
   ws.getRow(1).height = 24;
 
-  // 表頭
   for(var c2=0;c2<HEADERS.length;c2++){
     var h = ws.getCell(2, c2+1);
     h.value = HEADERS[c2];
@@ -664,7 +816,6 @@ function buildExcel(rs){
   }
   ws.getRow(2).height = 30;
 
-  // 資料 + 空白格線
   for(var r=3; r<=LASTROW; r++){
     var rec = rs[r-3];
     ws.getRow(r).height = 20;
@@ -674,25 +825,21 @@ function buildExcel(rs){
       cell.font = { name:"宋体", size:11 };
       cell.alignment = { horizontal:"center", vertical:"middle", wrapText:(c3===3||c3===12) };
       if(!rec) continue;
-      var key = ORDER[c3-1];
-      var v = (rec[key]||"").trim();
-      if(v==="") continue;
-      if(c3===1){
-        var p = v.split("-");
-        cell.value = new Date(+p[0], +p[1]-1, +p[2], 12, 0, 0);
+      var e = expectCell(rec, c3);
+      if(e.kind === "empty") continue;
+      if(e.kind === "date"){
+        cell.value = new Date(e.y, e.m-1, e.d, 12, 0, 0);
         cell.numFmt = "m/d";
         cell.font = { name:"宋体", size:10, bold:true };
-      } else if(c3===2 || c3===3 || c3===12){
-        cell.value = v;
-        if(c3!==12) cell.font = { name:"宋体", size:10 };
+      } else if(e.kind === "text"){
+        cell.value = e.v;
+        if(c3===2 || c3===3) cell.font = { name:"宋体", size:10 };
       } else {
-        cell.value = isNum(v) ? num(v) : v;
+        cell.value = e.v;
       }
     }
   }
 
-  // 合計列
-  var sumCols = [4,5,6,7,8,9,10,11,13,14];
   ws.getRow(SUMROW).height = 20;
   for(var c4=1;c4<=14;c4++){
     var sc = ws.getCell(SUMROW,c4);
@@ -701,43 +848,173 @@ function buildExcel(rs){
     sc.alignment = { horizontal:"center", vertical:"middle" };
   }
   ws.getCell(SUMROW,3).value = "合計";
-  sumCols.forEach(function(c){
-    var L = ws.getColumn(c).letter;
-    ws.getCell(SUMROW,c).value = { formula:"SUM("+L+"3:"+L+LASTROW+")" };
+  SUMCOLS.forEach(function(c){
+    var L = colLetter(c);
+    ws.getCell(SUMROW,c).value = { formula:"SUM("+L+"3:"+L+LASTROW+")", result: totals[c] };
   });
 
-  // 統計區
-  var S = 135;
   function put(row,col,val,bold){
     var cell = ws.getCell(row,col);
     cell.value = val;
     cell.font = { name:"宋体", size:11, bold:!!bold };
     cell.alignment = { horizontal:"center", vertical:"middle" };
     cell.border = thin();
-    return cell;
   }
   put(S,5,"項目",true); put(S,6,"金額",true);
   put(S,8,"月結",true);  put(S,9,"金額",true);
-  put(S+1,8,"簽單"); put(S+1,9,{formula:"N"+SUMROW});
+  put(S+1,8,"簽單"); put(S+1,9,{formula:"N"+SUMROW, result:T_monthly});
 
   var items = [
-    ["收入",   {formula:"D"+SUMROW}],
-    ["工資",   {formula:"E"+SUMROW}],
-    ["支出",   {formula:"G"+SUMROW+"+I"+SUMROW+"+J"+SUMROW+"+K"+SUMROW}],
-    ["回帳",   {formula:"M"+SUMROW}],
-    ["加油",   {formula:"F"+SUMROW}],
-    ["計程車", {formula:"H"+SUMROW}],
-    ["勞健保", num(DB.settings.labor)]
+    ["收入",   {formula:"D"+SUMROW, result:T_income}],
+    ["工資",   {formula:"E"+SUMROW, result:T_wage}],
+    ["支出",   {formula:"G"+SUMROW+"+I"+SUMROW+"+J"+SUMROW+"+K"+SUMROW, result:T_spend}],
+    ["回帳",   {formula:"M"+SUMROW, result:T_back}],
+    ["加油",   {formula:"F"+SUMROW, result:T_fuel}],
+    ["計程車", {formula:"H"+SUMROW, result:T_taxi}],
+    ["勞健保", T_labor]
   ];
   items.forEach(function(it,i){ put(S+1+i, 5, it[0]); put(S+1+i, 6, it[1]); });
   put(S+8,5,"結餘",true);
-  put(S+8,6,{formula:"F"+(S+1)+"-F"+(S+2)+"-F"+(S+3)+"-F"+(S+4)+"-F"+(S+5)+"-F"+(S+6)+"-F"+(S+7)}, true);
+  put(S+8,6,{formula:"F"+(S+1)+"-F"+(S+2)+"-F"+(S+3)+"-F"+(S+4)+"-F"+(S+5)+"-F"+(S+6)+"-F"+(S+7),
+             result:T_net}, true);
 
-  wb.xlsx.writeBuffer().then(function(buf){
-    var blob = new Blob([buf], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-    download(blob, "大雅車行-"+title+"報表.xlsx");
-    toast("已產出，請到「檔案」App 查看");
-  })["catch"](function(e){ alert("產生失敗："+e.message); });
+  var sums = {income:T_income, wage:T_wage, spend:T_spend, back:T_back, fuel:T_fuel,
+              taxi:T_taxi, labor:T_labor, net:T_net, monthly:T_monthly, count:rs.length};
+
+  /* === 產生檔案 → 再讀回來 → 一格一格比對 === */
+  return wb.xlsx.writeBuffer().then(function(buf){
+    var check = new ExcelJS.Workbook();
+    return check.xlsx.load(buf).then(function(){
+      var errs = verify(check, rs, title, LASTROW, SUMROW, S, totals, sums);
+      if(errs.length){ showCheck(false, errs); return; }
+      var blob = new Blob([buf], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      download(blob, "大雅車行-"+title+"報表.xlsx");
+      showCheck(true, [], sums, title);
+    });
+  });
+}
+
+/* 把「讀回來的檔案」和「手機裡的資料」逐格比對 */
+function fin(x){ return typeof x === "number" && isFinite(x); }
+/* ExcelJS 寫檔時會把「0」這個快取結果省略掉，讀回來就沒有 result。
+   缺 result 一律當作 0，再拿去跟「檔案格子自己加起來的數字」對，
+   所以就算真的被吃掉一個非 0 的數字，下面的比對還是會抓到。 */
+function resultOf(a){
+  if(a.kind !== "formula") return Number(a.v);
+  return (a.r === undefined || a.r === null || a.r === "") ? 0 : Number(a.r);
+}
+
+function verify(wb2, rs, title, LASTROW, SUMROW, S, totals, sums){
+  var e = [];
+  /* 這份清單是核對用的，故意獨立寫死，不跟產生檔案的那份共用 */
+  var VCOLS = [4,5,6,7,8,9,10,11,13,14];
+  var VHEAD = ["日期","客戶名稱","行程","實收","工資","油資","洗車","計程車","停車","舉牌","其他費用","備註","回帳","月結"];
+  var ws = wb2.getWorksheet(title);
+  if(!ws){ return ["找不到工作表「"+title+"」"]; }
+  for(var vi=0; vi<VHEAD.length; vi++){
+    if(String(ws.getCell(2,vi+1).value).trim() !== VHEAD[vi]) e.push("第 "+(vi+1)+" 欄應該是「"+VHEAD[vi]+"」");
+  }
+  /* 任何一個數字算出 NaN / 無限大，一律當錯 */
+  ["income","wage","spend","back","fuel","taxi","labor","net","monthly","count"].forEach(function(k){
+    if(!fin(sums[k])) e.push("「"+k+"」算出來不是有效數字（"+sums[k]+"）");
+  });
+  if(String(ws.getCell(1,1).value).trim() !== title) e.push("標題不對");
+  for(var c=1;c<=14;c++){
+    if(String(ws.getCell(2,c).value).trim() !== HEADERS[c-1])
+      e.push("第 "+c+" 欄的欄位名稱不對");
+  }
+  /* 每一筆、每一格 */
+  for(var i=0;i<rs.length;i++){
+    var row = i+3;
+    for(var c2=1;c2<=14;c2++){
+      var exp = expectCell(rs[i], c2), act = actualCell(ws.getCell(row,c2));
+      if(!sameCell(exp, act)){
+        e.push((i+1)+"筆「"+(rs[i].cust||rs[i].trip||"")+"」的"+HEADERS[c2-1]+
+               "：應該是 "+describe(exp)+"，檔案裡是 "+describe(act));
+      }
+    }
+  }
+  /* 多出來的列（不該有資料） */
+  for(var r2=rs.length+3; r2<=LASTROW; r2++){
+    for(var c3=1;c3<=14;c3++){
+      if(actualCell(ws.getCell(r2,c3)).kind !== "empty"){ e.push("第 "+r2+" 列多出不該有的資料"); break; }
+    }
+  }
+  /* 合計列：另外從「檔案本身的格子」再加一次，走完全獨立的路徑 */
+  var fileTotals = {};
+  VCOLS.forEach(function(c){
+    var t = 0;
+    for(var r=3; r<=LASTROW; r++){
+      var a = actualCell(ws.getCell(r,c));
+      if(a.kind === "number") t += a.v;
+    }
+    fileTotals[c] = t;
+    if(Math.abs(t - totals[c]) > 0.0001)
+      e.push(HEADERS[c-1]+"：手機加起來是 "+totals[c]+"，但檔案裡的格子加起來是 "+t);
+  });
+  VCOLS.forEach(function(c4){
+    var a = actualCell(ws.getCell(SUMROW,c4));
+    if(a.kind !== "formula"){ e.push(VHEAD[c4-1]+"的合計公式不見了"); return; }
+    if(a.f !== "SUM("+colLetter(c4)+"3:"+colLetter(c4)+LASTROW+")") e.push(VHEAD[c4-1]+"的合計範圍不對");
+    var rv = resultOf(a);
+    if(!fin(rv)) { e.push(VHEAD[c4-1]+"的合計不是有效數字"); return; }
+    if(Math.abs(rv - fileTotals[c4]) > 0.0001)
+      e.push(VHEAD[c4-1]+"合計：檔案的格子加起來是 "+fileTotals[c4]+"，合計列寫的是 "+rv);
+  });
+  /* 下方統計區 */
+  var want = [["收入",sums.income],["工資",sums.wage],["支出",sums.spend],["回帳",sums.back],
+              ["加油",sums.fuel],["計程車",sums.taxi],["勞健保",sums.labor]];
+  want.forEach(function(w,i){
+    var lab = ws.getCell(S+1+i,5).value, a = actualCell(ws.getCell(S+1+i,6));
+    if(String(lab).trim() !== w[0]) e.push("統計區第 "+(i+1)+" 項名稱不對");
+    var got = resultOf(a);
+    if(!fin(got)){ e.push(w[0]+"：檔案裡不是有效數字"); return; }
+    if(Math.abs(got - w[1]) > 0.0001) e.push(w[0]+"：手機算 "+w[1]+"，檔案是 "+got);
+  });
+  var net = actualCell(ws.getCell(S+8,6));
+  var netv = resultOf(net);
+  if(!fin(netv)) e.push("結餘不是有效數字");
+  else if(Math.abs(netv - sums.net) > 0.0001) e.push("結餘：手機算 "+sums.net+"，檔案是 "+netv);
+  var sig = actualCell(ws.getCell(S+1,9));
+  var sigv = resultOf(sig);
+  if(!fin(sigv)) e.push("簽單不是有效數字");
+  else if(Math.abs(sigv - sums.monthly) > 0.0001) e.push("簽單：手機算 "+sums.monthly+"，檔案是 "+sigv);
+  return e;
+}
+
+function showCheck(ok, errs, sums, title){
+  var box = $("checkBox");
+  box.style.display = "block";
+  if(ok){
+    var mine = sums.wage + sums.labor;
+    var adv  = sums.fuel + sums.spend + sums.taxi;
+    box.className = "card okbox";
+    box.innerHTML = '<h2>✅ 已核對完成</h2>' +
+      '<p class="hint"><b>'+title+'報表.xlsx</b> 已產生（'+sums.count+' 筆）。<br>' +
+      '系統把產生好的檔案重新打開，一格一格跟手機裡的資料比對過，<b>完全一致</b>。</p>' +
+      '<div class="stat big"><b>客人給的現金</b><span>'+money(sums.income)+'</span></div>' +
+      '<div class="sect">這些是爸爸的錢</div>' +
+      '<div class="stat sub"><b>工資</b><span>'+money(sums.wage)+'</span></div>' +
+      '<div class="stat sub"><b>勞健保補貼</b><span>'+money(sums.labor)+'</span></div>' +
+      '<div class="stat sum"><b>爸爸實得</b><span>'+money(mine)+'</span></div>' +
+      '<div class="sect">爸爸先墊的，要還他</div>' +
+      '<div class="stat sub"><b>加油</b><span>'+money(sums.fuel)+'</span></div>' +
+      '<div class="stat sub"><b>洗車・停車・舉牌・其他</b><span>'+money(sums.spend)+'</span></div>' +
+      '<div class="stat sub"><b>計程車</b><span>'+money(sums.taxi)+'</span></div>' +
+      '<div class="stat sum"><b>墊付合計</b><span>'+money(adv)+'</span></div>' +
+      (sums.back ? '<div class="stat sub"><b>已先繳回公司（回帳）</b><span>'+money(sums.back)+'</span></div>' : '') +
+      '<div class="stat total"><b>剩下要繳回公司</b><span>'+money(sums.net)+'</span></div>' +
+      '<div class="calc">'+money(mine)+' ＋ '+money(adv)+(sums.back?' ＋ '+money(sums.back):'')+
+        ' ＋ '+money(sums.net)+' ＝ '+money(sums.income)+' ✓</div>' +
+      '<p class="hint">Excel 裡的「結餘」應該是 <b>'+money(sums.net)+'</b>，打開對一下就知道對不對。</p>';
+  } else {
+    box.className = "card errbox";
+    box.innerHTML = '<h2>⚠️ 核對沒過，檔案沒有下載</h2>' +
+      '<p class="hint">為了不讓錯的表交出去，系統把檔案擋下來了。請把下面這段給女兒看：</p>' +
+      '<div class="errlist">' + errs.slice(0,20).map(function(x){ return '<div>• '+esc(x)+'</div>'; }).join("") +
+      (errs.length>20 ? '<div>…還有 '+(errs.length-20)+' 項</div>' : '') + '</div>';
+  }
+  box.scrollIntoView({behavior:"smooth", block:"center"});
 }
 
 /* ---------------- 備份 / 還原 ---------------- */
@@ -756,7 +1033,7 @@ $("restoreFile").addEventListener("change", function(e){
       if(!d.records) throw new Error("格式不對");
       if(confirm("要用備份檔取代目前的資料嗎？\n備份共 "+d.records.length+" 筆。")){
         DB = d; DB.settings = DB.settings||{labor:"3000"};
-        save(); $("f_labor").value = DB.settings.labor;
+        save(); showLabor();
         renderSuggestions(); refreshHeader(); renderList(); toast("已還原 ✓");
       }
     }catch(err){ alert("還原失敗：檔案格式不正確"); }
@@ -785,7 +1062,7 @@ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
 
 /* ---------------- 啟動 ---------------- */
 load();
-$("f_labor").value = DB.settings.labor || "3000";
+showLabor();
 setForm(null);
 renderSuggestions();
 refreshHeader();
