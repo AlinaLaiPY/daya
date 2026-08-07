@@ -311,7 +311,7 @@ nav button.on{color:var(--green);}
   <div class="card">
     <h2>系統</h2>
     <p class="hint">版本：<b id="verShow"></b>。有新版時會自動更新，不用做任何事。</p>
-    <p class="hint">雲端備份：<b id="syncShow">未啟用</b></p>
+    <p class="hint">雲端備份：<b id="syncShow">未啟用</b>　裝置代號：<b id="devShow"></b></p>
     <button class="btn grey" id="fixBtn" style="margin-top:12px">畫面怪怪的？按這裡修復</button>
   </div>
 </section>
@@ -1087,7 +1087,7 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v5';
+const APP_VER = '2026-08-08 v7';
 $('verShow').textContent = APP_VER;
 
 /* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
@@ -1098,12 +1098,29 @@ function scheduleSync(){
   clearTimeout(syncT);
   syncT = setTimeout(doSync, 3000);
 }
+/* 裝置代號：每支手機第一次開啟時自動產生，用來在試算表分辨是哪支裝置 */
+function deviceId(){
+  let id = localStorage.getItem('daya-device-id');
+  if(!id){
+    id = Math.random().toString(36).slice(2, 6).toUpperCase();
+    localStorage.setItem('daya-device-id', id);
+  }
+  return id;
+}
+function deviceType(){
+  const ua = navigator.userAgent;
+  if(/iPhone/.test(ua)) return 'iPhone';
+  if(/iPad/.test(ua)) return 'iPad';
+  if(/Android/.test(ua)) return 'Android';
+  return '電腦';
+}
 async function doSync(){
   if(!SYNC_URL || !navigator.onLine) return;
   try{
     const r = await fetch(SYNC_URL, {
       method: 'POST',
-      body: JSON.stringify({app:'daya', ver:APP_VER, time:new Date().toISOString(), data:store})
+      body: JSON.stringify({app:'daya', ver:APP_VER, time:new Date().toISOString(),
+        dev: deviceId(), devType: deviceType(), data:store})
     });
     if(r.ok){
       localStorage.removeItem(KEY + '-dirty');
@@ -1127,7 +1144,11 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   // 新版接手時自動重整一次（第一次安裝不重整）
   var hadCtrl = !!navigator.serviceWorker.controller, swReloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', ()=>{
-    if(hadCtrl && !swReloaded){ swReloaded = true; location.reload(); }
+    if(hadCtrl && !swReloaded){
+      swReloaded = true;
+      try{ localStorage.setItem('daya-updated-flag', '1'); }catch(err){}
+      location.reload();
+    }
   });
   window.addEventListener('load', ()=>{
     // updateViaCache:'none' → 每次都真的去伺服器問「sw.js 有沒有換」
@@ -1162,6 +1183,12 @@ setMonth(curMonth);
 renderChips();
 showLabor();
 showSyncStatus();
+$('devShow').textContent = deviceId() + '（' + deviceType() + '）';
+// 剛完成自動更新 → 跳通知讓使用者知道
+if(localStorage.getItem('daya-updated-flag')){
+  localStorage.removeItem('daya-updated-flag');
+  setTimeout(()=>toast('已自動更新到最新版 ✓'), 600);
+}
 </script>
 </body>
 </html>
