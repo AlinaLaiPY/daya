@@ -1,5 +1,5 @@
 /* 大雅車行記帳 — 離線快取 */
-var CACHE = "daya-v5";
+var CACHE = "daya-merged-v1";
 var ASSETS = ["./", "./index.html", "./manifest.json", "./apple-touch-icon.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e){
