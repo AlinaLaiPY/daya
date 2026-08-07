@@ -71,6 +71,7 @@ textarea{min-height:64px; resize:none;}
 }
 .chip:active{background:var(--green); color:#fff;}
 .chip.clear{border-color:#b9c4be; color:var(--muted);}
+.chip.on{background:var(--green); color:#fff;}
 
 .fold{border:2px solid var(--line); border-radius:14px; margin-bottom:14px; overflow:hidden; background:#fff;}
 .fold > .head{
@@ -203,9 +204,11 @@ nav button.on{color:var(--green);}
   <div class="card">
     <label class="f"><span>日期</span>
       <input type="date" id="f_date" min="2026-01-01" max="2026-12-31">
-      <div class="chips">
-        <button class="chip" id="chipToday">今天</button>
-        <button class="chip" id="chipYest">昨天</button>
+      <div class="chips" id="dateChips">
+        <button class="chip" data-ago="0" type="button">今天</button>
+        <button class="chip" data-ago="-1" type="button">昨天</button>
+        <button class="chip" data-ago="1" type="button">明天</button>
+        <button class="chip" data-ago="2" type="button">後天</button>
       </div>
     </label>
 
@@ -270,6 +273,12 @@ nav button.on{color:var(--green);}
 <section class="page" id="p-list">
   <div class="card" style="padding:12px 14px">
     <input type="search" id="f_search" placeholder="🔍 找客戶、地點或日期" autocomplete="off">
+    <div class="chips" id="sortChips" style="margin-top:10px">
+      <span style="font-size:16px; color:var(--muted); font-weight:700; align-self:center">排序</span>
+      <button class="chip" data-sort="added" type="button">最新記的</button>
+      <button class="chip" data-sort="dateDesc" type="button">日期 新→舊</button>
+      <button class="chip" data-sort="dateAsc" type="button">日期 舊→新</button>
+    </div>
   </div>
   <div class="card" id="statCard">
     <h2>本月統計</h2>
@@ -297,6 +306,12 @@ nav button.on{color:var(--green);}
     <button class="btn sub" id="backupBtn" style="margin-top:12px">備份全部資料</button>
     <button class="btn grey" id="restoreBtn" style="margin-top:10px">從備份還原</button>
     <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+  </div>
+
+  <div class="card">
+    <h2>系統</h2>
+    <p class="hint">版本：<b id="verShow"></b>。有新版時會自動更新，不用做任何事。</p>
+    <button class="btn grey" id="fixBtn" style="margin-top:12px">畫面怪怪的？按這裡修復</button>
   </div>
 </section>
 
@@ -530,8 +545,10 @@ function todayStr(off){
   if(off) d.setDate(d.getDate()+off);
   return d.getFullYear()===YEAR ? dateVal(d.getMonth()+1, d.getDate()) : dateVal(1,1);
 }
-$('chipToday').addEventListener('click', ()=>{ $('f_date').value = todayStr(0); });
-$('chipYest').addEventListener('click', ()=>{ $('f_date').value = todayStr(-1); });
+$('dateChips').addEventListener('click', e=>{
+  const b = e.target.closest('[data-ago]');
+  if(b) $('f_date').value = todayStr(parseInt(b.dataset.ago,10));
+});
 
 document.querySelectorAll('[data-trip]').forEach(b=>{
   b.addEventListener('click', ()=>{
@@ -577,6 +594,7 @@ function readForm(){
   const fareRaw = $('f_fare').value.trim();
   const e = {
     id: editingId || (Date.now() + '' + Math.floor(Math.random()*1000)),
+    ts: (editingId && findEntry(editingId) && findEntry(editingId).ts) || (editingId ? null : Date.now()),
     m, date: `${m}/${d}`, name, trip,
     fare: num(fareRaw),
     fareX: fareRaw==='X' || fareRaw==='x',
@@ -691,10 +709,37 @@ function renderStats(){
 }
 
 /* ════════════════ 紀錄清單 ════════════════ */
+/* 「最新記的」排序：新資料有 ts；舊資料退回用 id 裡的時間戳，預載資料當作最舊 */
+function addedKey(e){
+  if(e.ts) return e.ts;
+  const digits = String(e.id).replace(/\D/g,'').slice(0,13);
+  return parseInt(digits,10) || 0;
+}
+function sortMode(){
+  const m = store.sortMode;
+  if(m === 'dateDesc' || m === 'dateAsc') return m;
+  if(m === 'date') return 'dateAsc'; // 舊設定相容
+  return 'added';
+}
+function renderSortChips(){
+  document.querySelectorAll('#sortChips [data-sort]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.sort === sortMode());
+  });
+}
+document.getElementById('sortChips').addEventListener('click', e=>{
+  const b = e.target.closest('[data-sort]');
+  if(!b) return;
+  store.sortMode = b.dataset.sort; save();
+  renderSortChips(); renderList();
+});
+
 function renderList(){
-  refreshHeader(); renderStats();
-  // 最新的排最上面，方便隨手檢查剛記的內容（匯出時仍照日期排序）
-  let es = M().entries.slice().reverse();
+  refreshHeader(); renderStats(); renderSortChips();
+  // 最新記的＝剛記的在最上；日期新→舊／舊→新（匯出時一律照日期舊→新）
+  let es = M().entries.slice();
+  const sm = sortMode();
+  if(sm==='added') es.sort((a,b)=>addedKey(b)-addedKey(a));
+  else if(sm==='dateDesc') es.reverse();
   // 搜尋：比對日期、客戶、行程、備註與金額
   const q = ($('f_search').value || '').trim().toLowerCase();
   $('statCard').style.display = q ? 'none' : 'block';
@@ -1035,6 +1080,9 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
+const APP_VER = '2026-08-08 v3';
+$('verShow').textContent = APP_VER;
+let swReg = null;
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   // 新版接手時自動重整一次（第一次安裝不重整）
   var hadCtrl = !!navigator.serviceWorker.controller, swReloaded = false;
@@ -1044,10 +1092,29 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   window.addEventListener('load', ()=>{
     // updateViaCache:'none' → 每次都真的去伺服器問「sw.js 有沒有換」
     navigator.serviceWorker.register('sw.js', {updateViaCache:'none'})
-      .then(r=>{ r.update(); })      // 每次開啟強制檢查一次
+      .then(r=>{ swReg = r; r.update(); })      // 每次開啟強制檢查一次
       .catch(()=>{});
   });
+  // 從主畫面切回 App 時也檢查一次（App 常駐好幾天不會重新載入）
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && swReg) swReg.update().catch(()=>{});
+  });
 }
+/* 修復：清掉畫面快取重新載入（記帳資料在 localStorage，不會動到） */
+$('fixBtn').addEventListener('click', async ()=>{
+  if(!(await ask('要重新整理畫面嗎？\n記帳資料不會不見。', {okText:'修復'}))) return;
+  try{
+    if(window.caches){
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k=>caches.delete(k)));
+    }
+    if(navigator.serviceWorker){
+      const rs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map(r=>r.unregister()));
+    }
+  }catch(e){}
+  location.reload();
+});
 
 /* ════════════════ 啟動 ════════════════ */
 setForm(null);
