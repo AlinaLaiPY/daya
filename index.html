@@ -135,8 +135,8 @@ nav{
   box-shadow:0 -2px 10px rgba(0,0,0,.06);
 }
 nav button{
-  flex:1; border:0; background:none; font-family:inherit; padding:10px 4px 12px;
-  font-size:15px; font-weight:700; color:var(--muted); line-height:1.25;
+  flex:1; border:0; background:none; font-family:inherit; padding:10px 2px 12px;
+  font-size:14px; font-weight:700; color:var(--muted); line-height:1.25; white-space:nowrap;
 }
 nav button em{display:block; font-style:normal; font-size:26px; margin-bottom:2px;}
 nav button.on{color:var(--green);}
@@ -160,6 +160,27 @@ nav button.on{color:var(--green);}
 }
 .hint{font-size:16px; color:var(--muted); line-height:1.6; margin:10px 0 0;}
 .hint b{color:var(--ink);}
+/* 使用教學（聚光燈導覽） */
+.tour-hole{
+  position:fixed; z-index:300; border-radius:14px; pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55); border:3px solid #fff;
+  outline:4px solid var(--green-mid); outline-offset:3px;
+  transition:left .35s, top .35s, width .35s, height .35s;
+  animation:tourpulse 1.3s infinite;
+}
+@keyframes tourpulse{0%,100%{outline-offset:3px;}50%{outline-offset:9px;}}
+.tour-bubble{
+  position:fixed; z-index:301; left:12px; right:12px; bottom:calc(90px + var(--pad));
+  background:var(--white); border-radius:16px; padding:18px;
+  box-shadow:0 8px 30px rgba(0,0,0,.35); max-width:536px; margin:0 auto;
+}
+.tour-bubble .st{color:var(--muted); font-size:14px; font-weight:700; margin-bottom:6px;}
+.tour-bubble p{margin:0 0 14px; font-size:20px; font-weight:700; line-height:1.5;}
+.tour-bubble .row{display:flex; gap:10px;}
+.tour-bubble button{flex:1; border-radius:12px; padding:14px; font-size:19px; font-weight:800; font-family:inherit; border:2px solid var(--line); background:#fff; color:var(--muted);}
+.tour-bubble .nx{background:var(--green); border-color:var(--green); color:#fff; flex:2;}
+@media (prefers-reduced-motion:reduce){.tour-hole{animation:none; transition:none;}}
+
 /* 自製確認視窗（內嵌環境擋掉了瀏覽器內建的 confirm/prompt） */
 .overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; display:none; align-items:center; justify-content:center; padding:24px;}
 .overlay.on{display:flex;}
@@ -280,11 +301,15 @@ nav button.on{color:var(--green);}
       <button class="chip" data-sort="dateAsc" type="button">日期 舊→新</button>
     </div>
   </div>
-  <div class="card" id="statCard">
+  <div id="listBox"></div>
+</section>
+
+<!-- ══════════ 本月統計 ══════════ -->
+<section class="page" id="p-stat">
+  <div class="card">
     <h2>本月統計</h2>
     <div id="statBox"></div>
   </div>
-  <div id="listBox"></div>
 </section>
 
 <!-- ══════════ 產出報表 ══════════ -->
@@ -310,6 +335,7 @@ nav button.on{color:var(--green);}
 
   <div class="card">
     <h2>系統</h2>
+    <button class="btn sub" id="tourBtn" style="margin-top:4px">▶ 看使用教學</button>
     <p class="hint">版本：<b id="verShow"></b>。有新版時會自動更新，不用做任何事。</p>
     <p class="hint">雲端備份：<b id="syncShow">未啟用</b>　裝置代號：<b id="devShow"></b></p>
     <button class="btn grey" id="fixBtn" style="margin-top:12px">畫面怪怪的？按這裡修復</button>
@@ -321,11 +347,22 @@ nav button.on{color:var(--green);}
 <nav>
   <button class="on" data-go="p-add"><em>✏️</em>記一筆</button>
   <button data-go="p-list"><em>📋</em>本月紀錄</button>
+  <button data-go="p-stat"><em>📊</em>本月統計</button>
   <button data-go="p-out"><em>📤</em>產出報表</button>
 </nav>
 
 <div class="toast" id="toast"></div>
 <div class="undobar" id="undoBar"><span>已刪除</span><button id="undoBtn" type="button">復原</button></div>
+
+<div class="tour-hole" id="tourHole" style="display:none"></div>
+<div class="tour-bubble" id="tourBubble" style="display:none">
+  <div class="st" id="tourStep"></div>
+  <p id="tourText"></p>
+  <div class="row">
+    <button id="tourQuit" type="button">離開</button>
+    <button class="nx" id="tourNext" type="button">下一步</button>
+  </div>
+</div>
 
 <div class="overlay" id="dlgWrap">
   <div class="dlg">
@@ -523,6 +560,7 @@ function go(id){
   navBtns.forEach(b=>b.classList.toggle('on', b.dataset.go===id));
   window.scrollTo(0,0);
   if(id==='p-list') renderList();
+  if(id==='p-stat') renderStats();
 }
 ['foldCost','foldNote'].forEach(id=>{
   $(id).querySelector('.head').addEventListener('click', ()=>$(id).classList.toggle('open'));
@@ -539,7 +577,7 @@ function setMonth(m){
   const changed = m !== curMonth;
   curMonth = Math.min(12, Math.max(1, m));
   if(changed) $('f_search').value = '';
-  refreshHeader(); renderList(); renderChips();
+  refreshHeader(); renderList(); renderStats(); renderChips();
 }
 $('f_search').addEventListener('input', renderList);
 $('prevM').addEventListener('click', ()=>setMonth(curMonth-1));
@@ -741,7 +779,7 @@ document.getElementById('sortChips').addEventListener('click', e=>{
 });
 
 function renderList(){
-  refreshHeader(); renderStats(); renderSortChips();
+  refreshHeader(); renderSortChips();
   // 最新記的＝剛記的在最上；日期新→舊／舊→新（匯出時一律照日期舊→新）
   let es = M().entries.slice();
   const sm = sortMode();
@@ -749,7 +787,6 @@ function renderList(){
   else if(sm==='dateDesc') es.reverse();
   // 搜尋：比對日期、客戶、行程、備註與金額
   const q = ($('f_search').value || '').trim().toLowerCase();
-  $('statCard').style.display = q ? 'none' : 'block';
   if(q){
     es = es.filter(e=>{
       const hay = [e.date, e.name, e.trip, e.note, e.fareNote,
@@ -1087,7 +1124,7 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v7';
+const APP_VER = '2026-08-08 v8';
 $('verShow').textContent = APP_VER;
 
 /* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
@@ -1161,6 +1198,71 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
     if(!document.hidden && swReg) swReg.update().catch(()=>{});
   });
 }
+/* ════ 使用教學：聚光燈一步一步帶著操作 ════ */
+const TOUR = [
+  ['p-add', '#dateChips',   '日期不用打字：按「今天」「昨天」這些按鈕就好。'],
+  ['p-add', '#f_name',      '這裡打客人的名字。打過的會自動出現，點一下就好。'],
+  ['p-add', '#f_trip',      '行程：先打地點，再按下面的「～桃機」按鈕自動接上。'],
+  ['p-add', '#f_fare',      '收到的錢填這裡。沒收到現金就按「X（沒收）」。'],
+  ['p-add', '#wageChips',   '工資：按一下數字就填好，不用打字。'],
+  ['p-add', '#saveBtn',     '最後按這顆綠色大按鈕。變成「✓ 已儲存」就完成了！'],
+  ['p-list', '#f_search',   '要找之前記的：打客人名字或日期，馬上找到。'],
+  ['p-list', '#listBox .rec .acts', '每一筆都有「修改」「刪除」。刪錯了 8 秒內可以按「復原」。'],
+  ['p-stat', '#statBox',    '「本月統計」看這個月的總計，最下面是要繳回公司的錢。'],
+  ['p-out', '#shareBtn',    '月底按這顆，直接用 LINE 把報表傳給公司。']
+];
+let tourI = -1;
+function tourShow(i){
+  if(i >= TOUR.length){
+    tourEnd(); toast('教學結束，開始記帳吧 ✓');
+    go('p-add');
+    return;
+  }
+  tourI = i;
+  const [pg, sel, txt] = TOUR[i];
+  go(pg);
+  const el = document.querySelector(sel) || document.querySelector(sel.split(' ')[0]);
+  $('tourStep').textContent = `第 ${i+1} 步（共 ${TOUR.length} 步）`;
+  $('tourText').textContent = txt;
+  $('tourBubble').style.display = 'block';
+  $('tourNext').textContent = i === TOUR.length-1 ? '完成 ✓' : '下一步';
+  if(el) el.scrollIntoView({block:'center', behavior:'smooth'});
+  setTimeout(()=>{
+    if(tourI !== i || !el) return;
+    const r = el.getBoundingClientRect();
+    const h = $('tourHole');
+    h.style.display = 'block';
+    h.style.left = (r.left-8)+'px'; h.style.top = (r.top-8)+'px';
+    h.style.width = (r.width+16)+'px'; h.style.height = (r.height+16)+'px';
+    // 氣泡別擋住目標:目標在下半部時，氣泡改放畫面上方
+    const b = $('tourBubble');
+    const bh = b.offsetHeight || 170;
+    const bubbleTopWhenBottom = window.innerHeight - 90 - bh;
+    if(r.bottom > bubbleTopWhenBottom - 12){
+      b.style.top = '100px'; b.style.bottom = 'auto';
+    }else{
+      b.style.top = 'auto'; b.style.bottom = '';
+    }
+  }, 380);
+}
+function tourEnd(){
+  tourI = -1;
+  $('tourHole').style.display = 'none';
+  $('tourBubble').style.display = 'none';
+}
+$('tourBtn').addEventListener('click', ()=>tourShow(0));
+$('tourNext').addEventListener('click', ()=>tourShow(tourI+1));
+$('tourQuit').addEventListener('click', tourEnd);
+// 第一次打開 App：主動問要不要看教學（只問一次）
+if(!localStorage.getItem('daya-tour-seen')){
+  setTimeout(async ()=>{
+    localStorage.setItem('daya-tour-seen', '1');
+    if(await ask('第一次使用嗎？\n花一分鐘看使用教學，帶您操作一遍。', {okText:'好，開始教學'})){
+      tourShow(0);
+    }
+  }, 900);
+}
+
 /* 修復：清掉畫面快取重新載入（記帳資料在 localStorage，不會動到） */
 $('fixBtn').addEventListener('click', async ()=>{
   if(!(await ask('要重新整理畫面嗎？\n記帳資料不會不見。', {okText:'修復'}))) return;

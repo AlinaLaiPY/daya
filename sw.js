@@ -1,6 +1,6 @@
 /* 大雅車行記帳 — 離線快取
    ※ 每次改版把下面的版號 +1（v2 → v3 → …），手機才會抓到新版 */
-var CACHE = "daya-merged-v7";
+var CACHE = "daya-merged-v8";
 var ASSETS = ["./", "./index.html", "./manifest.json", "./apple-touch-icon.png", "./icon-192.png", "./icon-512.png"];
 var lastCheck = 0;
 
