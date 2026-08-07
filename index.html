@@ -116,6 +116,8 @@ textarea{min-height:64px; resize:none;}
 .rec .acts .ed{border-color:var(--green); color:var(--green);}
 .rec .acts .de{border-color:#e8c4bf; color:var(--danger);}
 .empty{text-align:center; color:var(--muted); padding:40px 20px; font-size:18px;}
+.day-found{color:var(--muted); font-size:16px; font-weight:700; margin:2px 4px 10px;}
+input[type=search]::-webkit-search-cancel-button{-webkit-appearance:searchfield-cancel-button;}
 
 nav{
   position:fixed; left:0; right:0; bottom:0; z-index:60; display:flex; background:#fff;
@@ -257,7 +259,10 @@ nav button.on{color:var(--green);}
 
 <!-- ══════════ 本月紀錄 ══════════ -->
 <section class="page" id="p-list">
-  <div class="card">
+  <div class="card" style="padding:12px 14px">
+    <input type="search" id="f_search" placeholder="🔍 找客戶、地點或日期" autocomplete="off">
+  </div>
+  <div class="card" id="statCard">
     <h2>本月統計</h2>
     <div id="statBox"></div>
   </div>
@@ -441,6 +446,23 @@ function closeDlg(ok){
 document.getElementById('dlgOk').addEventListener('click', ()=>closeDlg(true));
 document.getElementById('dlgCancel').addEventListener('click', ()=>closeDlg(false));
 
+/* 刪除後 8 秒內可復原 */
+let lastDeleted = null, undoT;
+function offerUndo(entry){
+  lastDeleted = entry;
+  const b = $('undoBar'); b.classList.add('on');
+  clearTimeout(undoT); undoT = setTimeout(()=>b.classList.remove('on'), 8000);
+}
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  if(!lastDeleted) return;
+  const m = lastDeleted.m;
+  store.months[m].entries.push(lastDeleted);
+  sortEntries(store.months[m].entries);
+  save(); lastDeleted = null;
+  $('undoBar').classList.remove('on'); clearTimeout(undoT);
+  setMonth(m); toast('已復原 ✓');
+});
+
 const navBtns = document.querySelectorAll('nav button');
 navBtns.forEach(b=>b.addEventListener('click', ()=>go(b.dataset.go)));
 function go(id){
@@ -461,9 +483,12 @@ function refreshHeader(){
   $('mSub').textContent = n ? `${n} 筆紀錄` : '還沒有紀錄';
 }
 function setMonth(m){
+  const changed = m !== curMonth;
   curMonth = Math.min(12, Math.max(1, m));
+  if(changed) $('f_search').value = '';
   refreshHeader(); renderList(); renderChips();
 }
+$('f_search').addEventListener('input', renderList);
 $('prevM').addEventListener('click', ()=>setMonth(curMonth-1));
 $('nextM').addEventListener('click', ()=>setMonth(curMonth+1));
 
@@ -568,7 +593,8 @@ $('deleteBtn').addEventListener('click', async ()=>{
   if(!(await ask(`確定要刪除這一筆嗎？\n\n${e?e.date:''}　${e?(e.name||''):''}`, {danger:true, okText:'刪除'}))) return;
   for(let i=1;i<=12;i++) store.months[i].entries = store.months[i].entries.filter(x=>x.id!==editingId);
   save(); exitEdit(); setForm(null);
-  setMonth(curMonth); toast('已刪除'); go('p-list');
+  setMonth(curMonth); go('p-list');
+  if(e) offerUndo(e);
 });
 $('clearBtn').addEventListener('click', ()=>{
   exitEdit(); setForm(null);
@@ -634,13 +660,29 @@ function renderStats(){
 function renderList(){
   refreshHeader(); renderStats();
   // 最新的排最上面，方便隨手檢查剛記的內容（匯出時仍照日期排序）
-  const es = M().entries.slice().reverse();
+  let es = M().entries.slice().reverse();
+  // 搜尋：比對日期、客戶、行程、備註與金額
+  const q = ($('f_search').value || '').trim().toLowerCase();
+  $('statCard').style.display = q ? 'none' : 'block';
+  if(q){
+    es = es.filter(e=>{
+      const hay = [e.date, e.name, e.trip, e.note, e.fareNote,
+        e.fare, e.wage, e.fuel, e.wash, e.taxi, e.park, e.flag, e.other, e.back, e.monthly]
+        .filter(v=>v!=null && v!=='').join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+    if(!es.length){
+      $('listBox').innerHTML = `<div class="empty">找不到「${escHtml(q)}」<br>換個字再試試</div>`;
+      return;
+    }
+  }
   if(!es.length){
     $('listBox').innerHTML = '<div class="empty">這個月還沒有紀錄<br>按下面的「記一筆」開始</div>';
     return;
   }
+  const foundBar = q ? `<div class="day-found">找到 ${es.length} 筆</div>` : '';
   const label = {wage:'工資', fuel:'油資', wash:'洗車', taxi:'計程車', park:'停車', flag:'舉牌', other:'其他', back:'回帳', monthly:'月結'};
-  $('listBox').innerHTML = es.map(e=>{
+  $('listBox').innerHTML = foundBar + es.map(e=>{
     const nums = [];
     const fareTxt = e.fare!=null ? money(e.fare) : (e.fareX ? 'X' : (e.fareNote||''));
     if(fareTxt) nums.push(`<span><i>實收</i> ${escHtml(fareTxt)}</span>`);
@@ -676,7 +718,7 @@ document.addEventListener('click', e=>{
     ask(`確定要刪除這一筆嗎？\n\n${r.date}　${r.name||''}\n${r.trip||''}`, {danger:true, okText:'刪除'}).then(yes=>{
       if(!yes) return;
       for(let i=1;i<=12;i++) store.months[i].entries = store.months[i].entries.filter(x=>x.id!==r.id);
-      save(); setMonth(curMonth); toast('已刪除');
+      save(); setMonth(curMonth); offerUndo(r);
     });
   }
 });
