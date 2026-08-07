@@ -18,6 +18,13 @@
   --pad: env(safe-area-inset-bottom, 0px);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+button{touch-action:manipulation;}
+/* 按下去的回饋：所有按鈕按壓時縮小變色，放開後還會閃一下，確保看得到 */
+@keyframes pressed{0%{transform:scale(1);}40%{transform:scale(.93);}100%{transform:scale(1);}}
+button.pressed{animation:pressed .3s ease;}
+@keyframes pagein{from{opacity:0; transform:translateY(8px);}to{opacity:1; transform:none;}}
+.page.on{animation:pagein .22s ease;}
+@media (prefers-reduced-motion: reduce){button.pressed{animation:none;} .page.on{animation:none;}}
 html,body{margin:0;padding:0;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC","Noto Sans TC",sans-serif;
@@ -81,7 +88,9 @@ textarea{min-height:64px; resize:none;}
   font-size:22px; font-weight:800; font-family:inherit; color:#fff; background:var(--green);
   margin-top:6px;
 }
-.btn:active{filter:brightness(.9);}
+.btn:active{filter:brightness(.85); transform:scale(.97);}
+.btn.flash{background:#0f5c33; transform:scale(1.02);}
+.btn{transition:transform .12s, filter .12s;}
 .btn.sub{background:#fff; color:var(--green); border:2px solid var(--green); font-size:19px; padding:15px;}
 .btn.danger{background:#fff; color:var(--danger); border:2px solid var(--danger); font-size:19px; padding:15px;}
 .btn.grey{background:#fff; color:var(--muted); border:2px solid var(--line); font-size:18px; padding:14px;}
@@ -446,6 +455,28 @@ function closeDlg(ok){
 document.getElementById('dlgOk').addEventListener('click', ()=>closeDlg(true));
 document.getElementById('dlgCancel').addEventListener('click', ()=>closeDlg(false));
 
+/* 每顆按鈕按下都有看得到的回饋 */
+document.addEventListener('touchstart', ()=>{}, {passive:true}); // 啟用 iOS 的 :active 效果
+document.addEventListener('pointerdown', e=>{
+  const b = e.target.closest('button');
+  if(!b) return;
+  b.classList.remove('pressed');
+  void b.offsetWidth; // 強制重排，讓動畫每次都重新播放
+  b.classList.add('pressed');
+  setTimeout(()=>b.classList.remove('pressed'), 320);
+});
+/* 按鈕短暫變成「✓ 完成」字樣 */
+function flashBtn(btn, txt){
+  const orig = btn.dataset.origText || btn.textContent;
+  btn.dataset.origText = orig;
+  btn.textContent = txt; btn.classList.add('flash');
+  clearTimeout(btn._flashT);
+  btn._flashT = setTimeout(()=>{
+    btn.textContent = btn.dataset.origText; btn.classList.remove('flash');
+    delete btn.dataset.origText;
+  }, 1000);
+}
+
 /* 刪除後 8 秒內可復原 */
 let lastDeleted = null, undoT;
 function offerUndo(entry){
@@ -585,7 +616,10 @@ $('saveBtn').addEventListener('click', ()=>{
   $('foldCost').classList.remove('open'); $('foldNote').classList.remove('open');
   setMonth(curMonth);
   if(wasEditing){ toast('已修改 ✓'); go('p-list'); }
-  else toast(`已儲存 ✓ 本月第 ${M().entries.length} 筆`);
+  else{
+    toast(`已儲存 ✓ 本月第 ${M().entries.length} 筆`);
+    flashBtn($('saveBtn'), '✓ 已儲存');
+  }
 });
 $('deleteBtn').addEventListener('click', async ()=>{
   if(!editingId) return;
@@ -626,8 +660,8 @@ function renderChips(){
 }
 
 /* ════════════════ 統計 ════════════════
-   結餘＝爸爸要繳回公司的錢：
-   收到的現金 − 工資（爸爸領）− 墊付（支出/加油/計程車）− 回帳 − 勞健保（公司補貼爸爸） */
+   結餘＝要繳回公司的錢：
+   收到的現金 − 工資 − 墊付（支出/加油/計程車）− 回帳 − 勞健保（公司補貼） */
 function totals(m){
   const md = M(m);
   const t = {fare:0,wage:0,fuel:0,wash:0,taxi:0,park:0,flag:0,other:0,back:0,monthly:0};
@@ -643,12 +677,12 @@ function renderStats(){
   const t = totals(curMonth);
   const rows = [
     ['收到客人的錢', '', t.fare],
-    ['工資', '爸爸領的', t.wage],
-    ['支出', '爸爸墊的（洗車/停車/舉牌/其他）', t.spend],
+    ['工資', '', t.wage],
+    ['支出', '洗車/停車/舉牌/其他', t.spend],
     ['回帳', '', t.back],
-    ['加油', '爸爸墊的', t.fuel],
-    ['計程車', '爸爸墊的', t.taxi],
-    ['勞健保', '公司補貼給爸爸', t.ins],
+    ['加油', '', t.fuel],
+    ['計程車', '', t.taxi],
+    ['勞健保', '公司補貼', t.ins],
     ['月結（簽單）', '公司月底跟客戶收', t.monthly]
   ];
   $('statBox').innerHTML =
@@ -725,7 +759,7 @@ document.addEventListener('click', e=>{
 
 function showLabor(){ $('laborShow').textContent = money(laborVal()); }
 $('laborEdit').addEventListener('click', async ()=>{
-  const v = await ask(`勞健保是公司固定補貼給爸爸的，平常不用改。\n只有公司真的調整了才需要改。\n目前是 ${money(laborVal())} 元。`, {input: String(laborVal()), okText:'改成這個金額'});
+  const v = await ask(`勞健保是公司固定補貼的，平常不用改。\n只有公司真的調整了才需要改。\n目前是 ${money(laborVal())} 元。`, {input: String(laborVal()), okText:'改成這個金額'});
   if(v === null) return;
   const n = num(v);
   if(n==null || n<0){ toast('請填數字，這次沒有更動'); return; }
@@ -960,8 +994,10 @@ $('exportBtn').addEventListener('click', function(){
         download(new Blob([bytes], {type:XLSX_MIME}), FILE_NAME);
         toast(`已核對 ${buildVerified.lastChecked.toLocaleString()} 格 ✓ 檔案在「下載項目」`);
       }
+      if(bytes) btn._ok = true;
     }catch(err){ ask('產生失敗：'+err.message, {alert:true}); }
     btn.textContent = '下載 Excel 檔'; btn.disabled = false;
+    if(btn._ok){ btn._ok = false; flashBtn(btn, '✓ 已產出'); }
   }, 50);
 });
 $('shareBtn').addEventListener('click', async function(){
@@ -980,9 +1016,9 @@ function todayISO(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-$('backupBtn').addEventListener('click', ()=>{
+$('backupBtn').addEventListener('click', function(){
   download(new Blob([JSON.stringify(store)], {type:'application/json'}), `車行記帳備份-${todayISO()}.json`);
-  toast('備份檔已產生 ✓');
+  toast('備份檔已產生 ✓'); flashBtn(this, '✓ 已備份');
 });
 $('restoreBtn').addEventListener('click', ()=>$('restoreFile').click());
 $('restoreFile').addEventListener('change', async e=>{
