@@ -343,7 +343,7 @@ nav button.on{color:var(--green);}
 /* ★★★ 雲端備份（Google 試算表）★★★
    照「雲端備份設定」資料夾的步驟部署後，把拿到的網址（結尾是 /exec）
    貼在下面的引號中間。留空＝不同步，App 一切照常。 */
-const SYNC_URL = '';
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbyYHk71PAy70emnEcVA0ULA2lUV5HbQrsnOLb9PvDevjpMKStvSUqy_FOKxUkYlvONcoA/exec';
 
 /* ════════════════ 資料 ════════════════ */
 const YEAR = 2026;
@@ -1087,7 +1087,7 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v4';
+const APP_VER = '2026-08-08 v5';
 $('verShow').textContent = APP_VER;
 
 /* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
