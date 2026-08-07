@@ -311,6 +311,7 @@ nav button.on{color:var(--green);}
   <div class="card">
     <h2>系統</h2>
     <p class="hint">版本：<b id="verShow"></b>。有新版時會自動更新，不用做任何事。</p>
+    <p class="hint">雲端備份：<b id="syncShow">未啟用</b></p>
     <button class="btn grey" id="fixBtn" style="margin-top:12px">畫面怪怪的？按這裡修復</button>
   </div>
 </section>
@@ -339,6 +340,11 @@ nav button.on{color:var(--green);}
 
 <script>
 'use strict';
+/* ★★★ 雲端備份（Google 試算表）★★★
+   照「雲端備份設定」資料夾的步驟部署後，把拿到的網址（結尾是 /exec）
+   貼在下面的引號中間。留空＝不同步，App 一切照常。 */
+const SYNC_URL = '';
+
 /* ════════════════ 資料 ════════════════ */
 const YEAR = 2026;
 const KEY = 'daya-report-2026';
@@ -416,6 +422,7 @@ function migrateOld(){
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(store)); }
   catch(e){ toast('儲存失敗，手機空間可能不足'); }
+  scheduleSync();
 }
 function M(n){ return store.months[n || curMonth]; }
 function defaultMonth(){
@@ -1080,8 +1087,41 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v3';
+const APP_VER = '2026-08-08 v4';
 $('verShow').textContent = APP_VER;
+
+/* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
+let syncT = null;
+function scheduleSync(){
+  if(!SYNC_URL) return;
+  localStorage.setItem(KEY + '-dirty', '1');
+  clearTimeout(syncT);
+  syncT = setTimeout(doSync, 3000);
+}
+async function doSync(){
+  if(!SYNC_URL || !navigator.onLine) return;
+  try{
+    const r = await fetch(SYNC_URL, {
+      method: 'POST',
+      body: JSON.stringify({app:'daya', ver:APP_VER, time:new Date().toISOString(), data:store})
+    });
+    if(r.ok){
+      localStorage.removeItem(KEY + '-dirty');
+      localStorage.setItem(KEY + '-synced', String(Date.now()));
+      showSyncStatus();
+    }
+  }catch(e){ /* 離線或失敗都沒關係，下次再補傳 */ }
+}
+function showSyncStatus(){
+  const el = $('syncShow');
+  if(!SYNC_URL){ el.textContent = '未啟用'; return; }
+  const t = parseInt(localStorage.getItem(KEY + '-synced'), 10);
+  el.textContent = t
+    ? new Date(t).toLocaleString('zh-TW', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) + ' ✓'
+    : '還沒同步過';
+}
+window.addEventListener('online', ()=>{ if(localStorage.getItem(KEY + '-dirty')) doSync(); });
+if(SYNC_URL) setTimeout(doSync, 2500); // 每次開啟同步一次（兼作使用紀錄）
 let swReg = null;
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   // 新版接手時自動重整一次（第一次安裝不重整）
@@ -1121,6 +1161,7 @@ setForm(null);
 setMonth(curMonth);
 renderChips();
 showLabor();
+showSyncStatus();
 </script>
 </body>
 </html>
