@@ -1036,8 +1036,16 @@ $('restoreFile').addEventListener('change', async e=>{
 
 /* ════════════════ 離線支援 ════════════════ */
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  // 新版接手時自動重整一次（第一次安裝不重整）
+  var hadCtrl = !!navigator.serviceWorker.controller, swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(hadCtrl && !swReloaded){ swReloaded = true; location.reload(); }
+  });
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    // updateViaCache:'none' → 每次都真的去伺服器問「sw.js 有沒有換」
+    navigator.serviceWorker.register('sw.js', {updateViaCache:'none'})
+      .then(r=>{ r.update(); })      // 每次開啟強制檢查一次
+      .catch(()=>{});
   });
 }
 
