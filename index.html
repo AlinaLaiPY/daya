@@ -338,7 +338,11 @@ body.tour-on{padding-bottom:75vh;} /* 教學時加長頁尾，任何目標都捲
 
   <div class="card">
     <h2>系統</h2>
-    <button class="btn sub" id="tourBtn" style="margin-top:4px">▶ 看使用教學</button>
+    <div class="fixedrow" style="margin-top:4px">
+      <span>使用者 <b id="userShow">未設定</b><small>雲端備份會用這個名字分類</small></span>
+      <button id="userEdit" type="button">修改</button>
+    </div>
+    <button class="btn sub" id="tourBtn" style="margin-top:12px">▶ 看使用教學</button>
     <p class="hint">版本：<b id="verShow"></b>。有新版時會自動更新，不用做任何事。</p>
     <p class="hint">雲端備份：<b id="syncShow">未啟用</b>　裝置代號：<b id="devShow"></b></p>
     <button class="btn grey" id="fixBtn" style="margin-top:12px">畫面怪怪的？按這裡修復</button>
@@ -500,7 +504,10 @@ function ask(msg, opts={}){
     dlgResolve = res;
     $('dlgMsg').textContent = msg;
     const inp = $('dlgInput');
-    if(opts.input !== undefined){ inp.style.display='block'; inp.value = opts.input; }
+    if(opts.input !== undefined){
+      inp.style.display='block'; inp.value = opts.input;
+      inp.setAttribute('inputmode', opts.textInput ? 'text' : 'numeric');
+    }
     else inp.style.display='none';
     $('dlgOk').textContent = opts.okText || '確定';
     $('dlgOk').classList.toggle('red', !!opts.danger);
@@ -1128,7 +1135,7 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v8';
+const APP_VER = '2026-08-08 v9';
 $('verShow').textContent = APP_VER;
 
 /* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
@@ -1155,13 +1162,21 @@ function deviceType(){
   if(/Android/.test(ua)) return 'Android';
   return '電腦';
 }
+/* 雲端識別：優先用使用者輸入的名字，沒有才用裝置代號 */
+function syncName(){
+  const n = (store.userName || '').trim();
+  return n || deviceId();
+}
+function showUser(){
+  $('userShow').textContent = (store.userName || '').trim() || '未設定';
+}
 async function doSync(){
   if(!SYNC_URL || !navigator.onLine) return;
   try{
     const r = await fetch(SYNC_URL, {
       method: 'POST',
       body: JSON.stringify({app:'daya', ver:APP_VER, time:new Date().toISOString(),
-        dev: deviceId(), devType: deviceType(), data:store})
+        dev: syncName(), devType: deviceType(), data:store})
     });
     if(r.ok){
       localStorage.removeItem(KEY + '-dirty');
@@ -1268,12 +1283,26 @@ function tourEnd(){
 $('tourBtn').addEventListener('click', ()=>tourShow(0));
 $('tourNext').addEventListener('click', ()=>tourShow(tourI+1));
 $('tourQuit').addEventListener('click', tourEnd);
-// 第一次打開 App：主動問要不要看教學（只問一次；教學進行中就不問）
+/* 修改使用者名稱 */
+$('userEdit').addEventListener('click', async ()=>{
+  const v = await ask('請問這支手機是誰在用？\n輸入名字，雲端備份會用它分類。（例：爸爸）',
+                      {input: (store.userName||''), okText:'就是這個名字', textInput:true});
+  if(v === null) return;
+  store.userName = v.trim();
+  save(); showUser();
+  toast(store.userName ? `好的，${store.userName} ✓` : '已清除名字');
+});
+
+// 第一次打開 App：先問名字，再問要不要看教學（只問一次；教學進行中就不問）
 if(!localStorage.getItem('daya-tour-seen')){
   setTimeout(async ()=>{
     if(tourI !== -1) return;
     localStorage.setItem('daya-tour-seen', '1');
-    if(await ask('第一次使用嗎？\n花一分鐘看使用教學，帶您操作一遍。', {okText:'好，開始教學'})){
+    if(!(store.userName||'').trim()){
+      const v = await ask('請問這支手機是誰在用？\n輸入名字就好。（例：爸爸）', {input:'', okText:'好了', textInput:true});
+      if(v !== null && v.trim()){ store.userName = v.trim(); save(); showUser(); }
+    }
+    if(await ask('要看使用教學嗎？\n花一分鐘帶您操作一遍。', {okText:'好，開始教學'})){
       tourShow(0);
     }
   }, 900);
@@ -1301,6 +1330,7 @@ setMonth(curMonth);
 renderChips();
 showLabor();
 showSyncStatus();
+showUser();
 $('devShow').textContent = deviceId() + '（' + deviceType() + '）';
 // 剛完成自動更新 → 跳通知讓使用者知道
 if(localStorage.getItem('daya-updated-flag')){
