@@ -194,6 +194,11 @@ body.tour-on{padding-bottom:75vh;} /* 教學時加長頁尾，任何目標都捲
 .dlg .row button{flex:1; border-radius:12px; padding:15px; font-size:19px; font-weight:700; font-family:inherit; border:2px solid var(--line); background:#fff; color:var(--muted);}
 .dlg .row .ok{background:var(--green); border-color:var(--green); color:#fff;}
 .dlg .row .ok.red{background:var(--danger); border-color:var(--danger);}
+/* 身份選擇 */
+#pickBtns{display:flex; flex-direction:column; gap:10px;}
+#pickBtns .pick{border:2.5px solid var(--green); background:#fff; color:var(--green); border-radius:14px; padding:18px; font-size:23px; font-weight:800; font-family:inherit;}
+#pickBtns .pick:active{background:var(--green); color:#fff;}
+#pickBtns .pick.other{border-color:var(--line); color:var(--muted); font-size:17px; padding:12px;}
 .fixedrow{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   background:var(--green-light); border-radius:12px; padding:12px 14px; margin-top:14px; font-size:17px;
@@ -372,6 +377,13 @@ body.tour-on{padding-bottom:75vh;} /* 教學時加長頁尾，任何目標都捲
   </div>
 </div>
 
+<div class="overlay" id="pickWrap">
+  <div class="dlg">
+    <p>請問您是誰？</p>
+    <div id="pickBtns"></div>
+  </div>
+</div>
+
 <div class="overlay" id="dlgWrap">
   <div class="dlg">
     <p id="dlgMsg"></p>
@@ -385,6 +397,9 @@ body.tour-on{padding-bottom:75vh;} /* 教學時加長頁尾，任何目標都捲
 
 <script>
 'use strict';
+/* ★★★ 身份清單：開啟 App 時讓使用者選自己是誰（想增減直接改這裡）★★★ */
+const USERS = ['爸爸', '品元'];
+
 /* ★★★ 雲端備份（Google 試算表）★★★
    照「雲端備份設定」資料夾的步驟部署後，把拿到的網址（結尾是 /exec）
    貼在下面的引號中間。留空＝不同步，App 一切照常。 */
@@ -436,6 +451,8 @@ function load(){
   }
   // 勞健保：全年共用一個固定值（公司固定補貼）
   if(num(s.ins)==null) s.ins = 3000;
+  // 墓碑記號：記住刪過哪些，雙向同步時刪除才會傳到其他裝置
+  if(!Array.isArray(s.tombs)) s.tombs = [];
   try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){}
   return s;
 }
@@ -547,6 +564,12 @@ function flashBtn(btn, txt){
   }, 1000);
 }
 
+/* 刪除留墓碑記號：同步時其他裝置才知道這筆被刪了 */
+function markDeleted(id){
+  store.tombs.push({id: String(id), t: Date.now()});
+  if(store.tombs.length > 500) store.tombs = store.tombs.slice(-500);
+}
+
 /* 刪除後 8 秒內可復原 */
 let lastDeleted = null, undoT;
 function offerUndo(entry){
@@ -557,6 +580,7 @@ function offerUndo(entry){
 document.getElementById('undoBtn').addEventListener('click', ()=>{
   if(!lastDeleted) return;
   const m = lastDeleted.m;
+  lastDeleted.mts = Date.now(); // 復原時間比墓碑新 → 同步時這筆會活下來
   store.months[m].entries.push(lastDeleted);
   sortEntries(store.months[m].entries);
   save(); lastDeleted = null;
@@ -651,6 +675,7 @@ function readForm(){
   const e = {
     id: editingId || (Date.now() + '' + Math.floor(Math.random()*1000)),
     ts: (editingId && findEntry(editingId) && findEntry(editingId).ts) || (editingId ? null : Date.now()),
+    mts: Date.now(),  // 修改時間：雙向同步時「較新的修改」獲勝
     m, date: `${m}/${d}`, name, trip,
     fare: num(fareRaw),
     fareX: fareRaw==='X' || fareRaw==='x',
@@ -699,6 +724,7 @@ $('deleteBtn').addEventListener('click', async ()=>{
   if(!editingId) return;
   const e = findEntry(editingId);
   if(!(await ask(`確定要刪除這一筆嗎？\n\n${e?e.date:''}　${e?(e.name||''):''}`, {danger:true, okText:'刪除'}))) return;
+  markDeleted(editingId);
   for(let i=1;i<=12;i++) store.months[i].entries = store.months[i].entries.filter(x=>x.id!==editingId);
   save(); exitEdit(); setForm(null);
   setMonth(curMonth); go('p-list');
@@ -851,6 +877,7 @@ document.addEventListener('click', e=>{
     if(!r) return;
     ask(`確定要刪除這一筆嗎？\n\n${r.date}　${r.name||''}\n${r.trip||''}`, {danger:true, okText:'刪除'}).then(yes=>{
       if(!yes) return;
+      markDeleted(r.id);
       for(let i=1;i<=12;i++) store.months[i].entries = store.months[i].entries.filter(x=>x.id!==r.id);
       save(); setMonth(curMonth); offerUndo(r);
     });
@@ -1135,7 +1162,7 @@ $('restoreFile').addEventListener('change', async e=>{
 });
 
 /* ════════════════ 離線支援 ════════════════ */
-const APP_VER = '2026-08-08 v9';
+const APP_VER = '2026-08-10 v11';
 $('verShow').textContent = APP_VER;
 
 /* ════ 雲端備份：每次儲存後與每次開啟時，把整份資料悄悄傳到 Google 試算表 ════ */
@@ -1162,16 +1189,67 @@ function deviceType(){
   if(/Android/.test(ua)) return 'Android';
   return '電腦';
 }
-/* 雲端識別：優先用使用者輸入的名字，沒有才用裝置代號 */
-function syncName(){
-  const n = (store.userName || '').trim();
-  return n || deviceId();
-}
+/* 雲端識別：一律用選定的身份名字；沒選身份前不同步（避免雜項代號塞爆雲端） */
+function syncName(){ return (store.userName || '').trim(); }
 function showUser(){
-  $('userShow').textContent = (store.userName || '').trim() || '未設定';
+  $('userShow').textContent = syncName() || '未設定';
+}
+/* 身份選擇：大按鈕點一下就綁定 */
+function pickUser(){
+  return new Promise(res=>{
+    const wrap = $('pickWrap'), box = $('pickBtns');
+    box.innerHTML = '';
+    USERS.forEach(n=>{
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pick'; b.textContent = n;
+      b.addEventListener('click', ()=>{ wrap.classList.remove('on'); res(n); });
+      box.appendChild(b);
+    });
+    const o = document.createElement('button');
+    o.type = 'button'; o.className = 'pick other'; o.textContent = '其他名字…';
+    o.addEventListener('click', async ()=>{
+      wrap.classList.remove('on');
+      const v = await ask('請輸入名字：', {input:'', okText:'好了', textInput:true});
+      res(v && v.trim() ? v.trim() : null);
+    });
+    box.appendChild(o);
+    wrap.classList.add('on');
+  });
+}
+async function ensureUser(){
+  if(syncName()) return;
+  const n = await pickUser();
+  if(n){
+    store.userName = n; save(); showUser(); showSyncStatus();
+    toast(`您好，${n} ✓`);
+  }
+}
+/* 資料指紋：判斷雲端合併結果跟本機是否相同（相同就不用動） */
+function dataFp(months, tombs){
+  const parts = [];
+  for(let i=1;i<=12;i++){
+    (((months||{})[i]||{}).entries||[]).forEach(e=>parts.push(e.id+':'+(e.mts||e.ts||0)));
+  }
+  parts.sort();
+  const tb = (tombs||[]).map(t=>t.id+':'+t.t).sort();
+  return parts.join(',')+'|'+tb.join(',');
+}
+/* 採用雲端合併結果：其他裝置記的會出現、被刪的會消失（雙向同步的「收」） */
+function adoptMerged(m){
+  if(!m || !m.months) return;
+  if(dataFp(store.months, store.tombs) === dataFp(m.months, m.tombs)) return; // 沒變就不動
+  for(let i=1;i<=12;i++){
+    const es = ((m.months[i]||{}).entries||[]).filter(x=>x && x.id);
+    store.months[i].entries = es;
+    sortEntries(store.months[i].entries);
+  }
+  store.tombs = Array.isArray(m.tombs) ? m.tombs : [];
+  try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){}
+  setMonth(curMonth);
+  toast('已同步雲端最新資料 ✓');
 }
 async function doSync(){
-  if(!SYNC_URL || !navigator.onLine) return;
+  if(!SYNC_URL || !navigator.onLine || !syncName()) return; // 沒選身份不上傳，雲端不會出現雜項代號
   try{
     const r = await fetch(SYNC_URL, {
       method: 'POST',
@@ -1182,12 +1260,17 @@ async function doSync(){
       localStorage.removeItem(KEY + '-dirty');
       localStorage.setItem(KEY + '-synced', String(Date.now()));
       showSyncStatus();
+      try{
+        const j = await r.json();
+        if(j && j.ok && j.merged) adoptMerged(j.merged);
+      }catch(e){ /* 舊版伺服器沒有回傳合併結果，略過 */ }
     }
   }catch(e){ /* 離線或失敗都沒關係，下次再補傳 */ }
 }
 function showSyncStatus(){
   const el = $('syncShow');
   if(!SYNC_URL){ el.textContent = '未啟用'; return; }
+  if(!syncName()){ el.textContent = '要先選擇使用者'; return; }
   const t = parseInt(localStorage.getItem(KEY + '-synced'), 10);
   el.textContent = t
     ? new Date(t).toLocaleString('zh-TW', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) + ' ✓'
@@ -1283,30 +1366,22 @@ function tourEnd(){
 $('tourBtn').addEventListener('click', ()=>tourShow(0));
 $('tourNext').addEventListener('click', ()=>tourShow(tourI+1));
 $('tourQuit').addEventListener('click', tourEnd);
-/* 修改使用者名稱 */
+/* 修改使用者：重新開身份選單 */
 $('userEdit').addEventListener('click', async ()=>{
-  const v = await ask('請問這支手機是誰在用？\n輸入名字，雲端備份會用它分類。（例：爸爸）',
-                      {input: (store.userName||''), okText:'就是這個名字', textInput:true});
-  if(v === null) return;
-  store.userName = v.trim();
-  save(); showUser();
-  toast(store.userName ? `好的，${store.userName} ✓` : '已清除名字');
+  const n = await pickUser();
+  if(n){ store.userName = n; save(); showUser(); showSyncStatus(); toast(`您好，${n} ✓`); }
 });
 
-// 第一次打開 App：先問名字，再問要不要看教學（只問一次；教學進行中就不問）
-if(!localStorage.getItem('daya-tour-seen')){
-  setTimeout(async ()=>{
-    if(tourI !== -1) return;
+// 開啟 App：還沒選身份就先選（強制綁定）；第一次另外問要不要看教學
+setTimeout(async ()=>{
+  await ensureUser();
+  if(!localStorage.getItem('daya-tour-seen')){
     localStorage.setItem('daya-tour-seen', '1');
-    if(!(store.userName||'').trim()){
-      const v = await ask('請問這支手機是誰在用？\n輸入名字就好。（例：爸爸）', {input:'', okText:'好了', textInput:true});
-      if(v !== null && v.trim()){ store.userName = v.trim(); save(); showUser(); }
-    }
-    if(await ask('要看使用教學嗎？\n花一分鐘帶您操作一遍。', {okText:'好，開始教學'})){
+    if(tourI === -1 && await ask('要看使用教學嗎？\n花一分鐘帶您操作一遍。', {okText:'好，開始教學'})){
       tourShow(0);
     }
-  }, 900);
-}
+  }
+}, 800);
 
 /* 修復：清掉畫面快取重新載入（記帳資料在 localStorage，不會動到） */
 $('fixBtn').addEventListener('click', async ()=>{
